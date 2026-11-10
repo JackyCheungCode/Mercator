@@ -159,17 +159,26 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
   setVisualProgress("正在讀取 PDF 頁面…");setVisualPercent(12);const pdfjs=await import("pdfjs-dist");const workerUrl=(await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;const pdf=await pdfjs.getDocument({data:await source.arrayBuffer()}).promise;const pageLimit=Math.min(pdf.numPages,maxPages);const pages:{pageNumber:number;blob:Blob}[]=[];
   for(let pageNumber=1;pageNumber<=pageLimit;pageNumber++){setVisualProgress("正在轉換 PDF 第 "+pageNumber+" / "+pageLimit+" 頁…");setVisualPercent(12+Math.round(pageNumber/pageLimit*16));const page=await pdf.getPage(pageNumber);const base=page.getViewport({scale:1});let scale=Math.min(2,maxDimension/Math.max(base.width,base.height));let blob:Blob|null=null;while(scale>=0.7){const viewport=page.getViewport({scale});const canvas=document.createElement("canvas");canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const context=canvas.getContext("2d");if(!context)throw new Error("無法建立 PDF 預覽畫布。");await page.render({canvasContext:context,viewport}).promise;blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",0.92));canvas.width=0;canvas.height=0;if(blob&&blob.size<=4.8*1024*1024)break;scale*=0.8;}if(!blob||blob.size>5*1024*1024)throw new Error("PDF 第 "+pageNumber+" 頁轉圖後仍超過 5 MB，請降低該頁解析度或拆分 PDF。");pages.push({pageNumber,blob});}return {pages,totalPages:pdf.numPages};
  }
+ async function analyzeCadInWorker(dxfText:string):Promise<any>{
+  return await new Promise((resolve,reject)=>{
+   const worker=new Worker(new URL("./workers/cad-analysis.worker.ts",import.meta.url),{type:"module"});
+   let settled=false;
+   const finish=(error?:Error,result?:any)=>{if(settled)return;settled=true;clearTimeout(timeout);worker.terminate();if(error)reject(error);else resolve(result);};
+   const timeout=setTimeout(()=>finish(new Error("CAD 背景解析超過 180 秒，已安全停止。請分區另存 DXF 後分批分析。")),180000);
+   worker.onmessage=(event:MessageEvent)=>{const payload=event.data;if(payload?.ok)finish(undefined,payload.analysis);else finish(new Error(payload?.error||"CAD 背景解析失敗。"));};
+   worker.onerror=(event)=>finish(new Error("CAD 背景解析工作執行緒錯誤："+(event.message||"未知錯誤")));
+   worker.postMessage({dxfText});
+  });
+ }
  async function extractCadText(d:Drawing,url:string):Promise<{text:string;lines:Array<{text:string;confidence:number;bbox:any}>;entities:number;format:string;analysis:any}>{
   setVisualProgress("正在讀取 CAD 向量資料…");setVisualPercent(8);
   const dxfText=await getCadDxfText(d,url);
   const dxfBytes=new Blob([dxfText]).size;const estimatedEntities=(dxfText.match(/(?:^|\r?\n)0\r?\n/g)||[]).length;
-  if(dxfBytes>12*1024*1024)throw new Error("CAD 轉換後超過 12 MB。為避免瀏覽器主執行緒卡死，請清理非必要圖層或分區另存 DXF。");
-  if(estimatedEntities>8000)throw new Error("CAD 圖元約 "+estimatedEntities.toLocaleString()+" 個，超出目前瀏覽器安全解析上限（8,000）。請先精簡圖層或分區另存 DXF。");
-  setVisualProgress("正在解析 CAD 實體、圖層、圖塊屬性與座標…");setVisualPercent(42);
-  const parserModule:any=await import("dxf-parser");const DxfParser=parserModule.default??parserModule.DxfParser;const parser=new DxfParser();let drawing:any;
-  try{drawing=parser.parseSync(dxfText);}catch(error){throw new Error("DXF 結構解析失敗："+(error instanceof Error?error.message:String(error)));}
-  const {analyzeCadEntities}=await import("./lib/cad-native-analysis");
-  const analysis=analyzeCadEntities(drawing);
+  const maxCadBytes=80*1024*1024;const maxCadEntities=100000;
+  if(dxfBytes>maxCadBytes)throw new Error("DXF 轉換後約 "+(dxfBytes/1024/1024).toFixed(1)+" MB，超過目前瀏覽器背景解析安全上限（80 MB）。請先清理非必要圖層或分區另存 DXF；12 MB 以下不再受舊限制。");
+  if(estimatedEntities>maxCadEntities)throw new Error("CAD 圖元約 "+estimatedEntities.toLocaleString()+" 個，超過目前背景解析安全上限（100,000）。請分區另存 DXF 後分批分析。");
+  setVisualProgress("正在啟動 CAD 背景解析工作執行緒…");setVisualPercent(38);
+  const analysis=await analyzeCadInWorker(dxfText);
   const lines=analysis.textBlocks.map((item:any)=>({text:item.text,confidence:1,bbox:item.bbox}));
   const unique=[...new Map(lines.map((line:any)=>[line.text,line])).values()];
   if(!analysis.entityCount)throw new Error("CAD 文件已轉換，但沒有可解析的 CAD 實體。請檢查檔案版本或另存為 DXF。");
