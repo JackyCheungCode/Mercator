@@ -1,0 +1,19 @@
+name = "mercator-engine"
+main = "cloudflare/worker.ts"
+compatibility_date = "2026-11-10"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[containers]]
+class_name = "EngineContainer"
+image = "./Dockerfile"
+max_instances = 3
+instance_type = "basic"
+
+[[durable_objects.bindings]]
+name = "ENGINE_CONTAINER"
+class_name = "EngineContainer"
+
+[exports.EngineContainer]
+type = "durable-object"
+storage = "sqlite"
