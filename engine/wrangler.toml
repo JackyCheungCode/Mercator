@@ -7,8 +7,8 @@ workers_dev = true
 [[containers]]
 class_name = "EngineContainer"
 image = "./Dockerfile"
+scheduling_policy = "durable_object"
 max_instances = 3
-instance_type = "basic"
 
 [[durable_objects.bindings]]
 name = "ENGINE_CONTAINER"
