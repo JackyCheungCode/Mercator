@@ -109,7 +109,7 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
    if(saved.error)throw new Error("OCR 已完成但任務摘要保存失敗："+saved.error.message);
    setJobs(current=>current.map(item=>item.id===job.id?{...item,summary}:item));
    setVisualResult(JSON.stringify({browser_ocr:browserOcr},null,2));
-   setVisualPercent(100);setNotice({kind:"success",title:isCad?"CAD 文字與設備識別完成":"瀏覽器 OCR 完成",subtitle:(isCad?"已解析 "+cadMeta?.entities+" 個 CAD 實體，直接提取向量文字與圖塊名稱。":"已分析 "+results.length+" 頁，保存 "+textRows.length+" 個文字區塊、"+componentRows.length+" 個設備代號候選及 "+uniqueParameters.length+" 個電氣參數候選。"+(pageCount>results.length?" 文件共 "+pageCount+" 頁，本次先處理前 "+results.length+" 頁。":"")});setWorkflowStep(2);
+   setVisualPercent(100);const successTitle=isCad?"CAD 文字與設備識別完成":"瀏覽器 OCR 完成";const successText=isCad?"已解析 "+cadMeta?.entities+" 個 CAD 實體，直接提取向量文字與圖塊名稱。":"已分析 "+results.length+" 頁，保存 "+textRows.length+" 個文字區塊、"+componentRows.length+" 個設備代號候選及 "+uniqueParameters.length+" 個電氣參數候選。"+(pageCount>results.length?" 文件共 "+pageCount+" 頁，本次先處理前 "+results.length+" 頁。":"");setNotice({kind:"success",title:successTitle,subtitle:successText});setWorkflowStep(2);
   }catch(error){setNotice({kind:"error",title:"瀏覽器 OCR 未完成",subtitle:error instanceof Error?error.message:String(error)});}
   finally{setVisualBusy(false);setVisualProgress("");setVisualPercent(0);}
  }
