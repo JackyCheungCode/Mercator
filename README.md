@@ -11,7 +11,7 @@ Mercator 是面向電氣工程圖紙的智能審查平台。第一版聚焦單�
 - Workers AI 提供可選的視覺初篩；受 Cloudflare Free 配額限制
 - OCR 文字、設備代號候選、參數候選與審查紀錄保存到 Supabase
 
-第一版支援 PDF、PNG、JPG、WEBP 的瀏覽器 OCR；單次最多處理 10 頁，避免長文件讓一般裝置記憶體或 CPU 過載。TIFF、DWG、DXF 可上傳保存，但目前尚未提供瀏覽器端完整解析。
+第一版支援 PDF、PNG、JPG、WEBP 的瀏覽器 OCR；單次最多處理 5 頁，避免長文件讓一般裝置記憶體或 CPU 過載。TIFF、DWG、DXF 可上傳保存，但目前尚未提供瀏覽器端完整解析。
 
 ## Analysis limitations
 - 瀏覽器 OCR 只產生候選文字與設備代號，不代表設備已被可靠分類。
