@@ -52,7 +52,7 @@ def extract_electrical_parameters(blocks):
         ("voltage", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kV|V)(?!\w)", re.I)),
         ("current", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kA|A)(?!\w)", re.I)),
         ("frequency", re.compile(r"(?<!\w)(?:50|60)\s*Hz(?!\w)", re.I)),
-        ("ct_ratio", re.compile(r"(?<!\w)\d{1,5}\s*/\s*\d{1,4}(?:\s*,\s*0\.[125])?(?!\w)", re.I)),
+        ("ct_ratio", re.compile(r"(?<!\w)\d{1,5}\s*/\s*\d{1,4}(?:\s*,\s*0\.[125])?\s*A?(?!\w)", re.I)),
         ("power", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kVA|MVA|kW|MW)(?!\w)", re.I)),
     ]
     found, seen = [], set()
