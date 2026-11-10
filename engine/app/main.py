@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from PIL import Image
 from pytesseract import Output
 
-app = FastAPI(title="Mercator Drawing Analysis Engine", version="0.2.0")
+app = FastAPI(title="Mercator Drawing Analysis Engine", version="0.3.0")
 MAX_BYTES = 50 * 1024 * 1024
 ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".dxf"}
 PATTERNS = [re.compile(r"\bQF\s*[-_]?\s*\d+\b", re.I), re.compile(r"\bCT\s*[-_]?\s*\d*\b", re.I), re.compile(r"\b(?:UPS|ATS|ACB|MCCB|VCB)\s*[-_]?\s*\d*\b", re.I), re.compile(r"\b\d{2,5}\s*/\s*\d{1,4}\s*,\s*0\.[125]\b")]
@@ -45,6 +45,74 @@ def candidate_labels(blocks):
                     seen.add(key); out.append({"page_number": block["page_number"], "label": label, "bbox": block["bbox"], "source_text": block["text_content"], "ocr_confidence": block["confidence"], "classification": "candidate_only"})
     return out
 
+
+def extract_electrical_parameters(blocks):
+    """Extract literal parameter strings; never infer missing engineering values."""
+    patterns = [
+        ("voltage", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kV|V)(?!\\w)", re.I)),
+        ("current", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kA|A)(?!\\w)", re.I)),
+        ("frequency", re.compile(r"(?<!\\w)(?:50|60)\\s*Hz(?!\\w)", re.I)),
+        ("ct_ratio", re.compile(r"(?<!\\w)\\d{1,5}\\s*/\\s*\\d{1,4}(?:\\s*,\\s*0\\.[125])?(?!\\w)", re.I)),
+        ("power", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kVA|MVA|kW|MW)(?!\\w)", re.I)),
+    ]
+    found, seen = [], set()
+    for block in blocks:
+        text = block["text_content"]
+        for kind, pattern in patterns:
+            for match in pattern.finditer(text):
+                value = re.sub(r"\\s+", "", match.group()).upper()
+                key = (block["page_number"], kind, value, block["bbox"].get("x"), block["bbox"].get("y"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                found.append({
+                    "page_number": block["page_number"], "parameter_type": kind,
+                    "value_text": value, "source_text": text,
+                    "bbox": block["bbox"], "ocr_confidence": block["confidence"],
+                    "source": block.get("source", "ocr")
+                })
+    return found
+
+
+def candidate_findings(blocks, labels, parameters):
+    """Conservative review leads, not electrical compliance decisions."""
+    findings = []
+    occurrences = {}
+    for block in blocks:
+        for pattern in PATTERNS[:3]:
+            for match in pattern.finditer(block["text_content"]):
+                tag = re.sub(r"\\s+", "", match.group()).upper()
+                occurrences.setdefault((block["page_number"], tag), []).append(block)
+        if block["confidence"] < 0.35:
+            findings.append({
+                "category": "ocr_uncertainty", "severity": "info",
+                "title": "文字辨識信心偏低",
+                "description": f"頁面 {block['page_number']} 有一段文字辨識信心值為 {block['confidence']:.0%}，內容為「{block['text_content']}」。",
+                "page_number": block["page_number"], "bbox": block["bbox"],
+                "evidence": {"source_text": block["text_content"], "ocr_confidence": block["confidence"]},
+                "requires_engineer_review": True
+            })
+    for (page, tag), matches in occurrences.items():
+        if len(matches) > 1:
+            findings.append({
+                "category": "possible_duplicate_tag", "severity": "medium",
+                "title": f"設備代號可能重複：{tag}",
+                "description": f"第 {page} 頁有 {len(matches)} 個 OCR 文字區域辨識為 {tag}。可能是重複標註，也可能是同一標籤被拆分或重複掃描，需查看原圖確認。",
+                "page_number": page, "bbox": matches[0]["bbox"],
+                "evidence": {"tag": tag, "occurrences": [m["bbox"] for m in matches], "source": "ocr_candidate"},
+                "requires_engineer_review": True
+            })
+    for item in parameters:
+        if item["parameter_type"] == "ct_ratio" and item["ocr_confidence"] < 0.6:
+            findings.append({
+                "category": "parameter_uncertainty", "severity": "info",
+                "title": "CT 變比文字需要核對",
+                "description": f"辨識到疑似 CT 變比「{item['value_text']}」，但 OCR 信心值不足，不能直接用於參數校驗。",
+                "page_number": item["page_number"], "bbox": item["bbox"],
+                "evidence": item, "requires_engineer_review": True
+            })
+    return findings
+
 def analyze_dxf(path: Path):
     try: doc = ezdxf.readfile(path)
     except Exception as exc: raise HTTPException(422, f"Unable to parse DXF: {exc}") from exc
@@ -73,7 +141,7 @@ def health(): return {"ok": True, "service": "mercator-analysis-engine", "versio
 
 @app.get("/v1/capabilities")
 def capabilities():
-    return {"version": "0.2.0", "ocr": True, "image_preprocessing": True, "pdf_rasterization": True, "dxf_vector_extraction": True, "symbol_detection": False, "electrical_topology": False, "rule_validation": False, "revision_comparison": False, "ocr_languages": os.getenv("TESSERACT_LANG", "chi_tra+eng").split("+")}
+    return {"version": "0.3.0", "ocr": True, "image_preprocessing": True, "pdf_rasterization": True, "dxf_vector_extraction": True, "symbol_detection": False, "electrical_topology": False, "rule_validation": False, "revision_comparison": False, "ocr_languages": os.getenv("TESSERACT_LANG", "chi_tra+eng").split("+")}
 
 @app.post("/v1/analyze")
 async def analyze(file: UploadFile = File(...), authorization: str | None = Header(default=None)):
@@ -86,7 +154,10 @@ async def analyze(file: UploadFile = File(...), authorization: str | None = Head
     if suffix == ".dxf":
         with tempfile.NamedTemporaryFile(suffix=".dxf") as tmp:
             tmp.write(raw); tmp.flush(); result = analyze_dxf(Path(tmp.name))
-        return {"ok": True, "filename": name, **result, "candidate_labels": candidate_labels(result["text_blocks"]), "engine_version": "0.2.0", "notice": "CAD text/vector extraction only; no electrical semantics inferred."}
+        labels = candidate_labels(result["text_blocks"])
+        parameters = extract_electrical_parameters(result["text_blocks"])
+        findings = candidate_findings(result["text_blocks"], labels, parameters)
+        return {"ok": True, "filename": name, **result, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings, "engine_version": "0.3.0", "notice": "CAD text/vector extraction and conservative review leads only; no electrical compliance decision."}
     blocks, pages = [], 0
     try:
         if suffix == ".pdf":
@@ -105,4 +176,7 @@ async def analyze(file: UploadFile = File(...), authorization: str | None = Head
                 image.seek(i); blocks.extend(ocr_image(image.copy(), i+1, os.getenv("TESSERACT_LANG", "chi_tra+eng")))
     except HTTPException: raise
     except Exception as exc: raise HTTPException(422, f"Unable to decode or OCR drawing: {exc}") from exc
-    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": candidate_labels(blocks), "geometry": [], "engine_version": "0.2.0", "notice": "OCR candidates only. Symbol detection, topology and compliance validation are not implemented."}
+    labels = candidate_labels(blocks)
+    parameters = extract_electrical_parameters(blocks)
+    findings = candidate_findings(blocks, labels, parameters)
+    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings, "geometry": [], "engine_version": "0.3.0", "notice": "OCR candidates and conservative review leads only. Symbol detection, topology and compliance validation are not implemented."}
