@@ -9,6 +9,9 @@
 - DXF INSERT block-name candidates and exact endpoint connectivity graph for LINE/POLYLINE geometry.
 - Review leads for low-confidence symbol labels, possible duplicate tags, low-confidence CT-ratio text and dangling geometric endpoints. All require engineer review.
 
+## Verification
+- Run `python -m compileall -q app tests` and `python -m unittest discover -s tests -v` from this directory. GitHub Actions runs these checks on engine changes.
+
 ## Current limitations
 - Raster symbols are geometric proposals, not validated breaker/isolator/CT/PT/transformer classifiers. Accurate symbol recognition needs a labelled electrical-symbol dataset and a trained detector.
 - Raster topology does not yet resolve T-junctions, wire crossings, junction dots, wire gaps, symbol terminals or cross-page references.
