@@ -10,6 +10,7 @@
 - Review leads for low-confidence symbol labels, possible duplicate tags, low-confidence CT-ratio text and dangling geometric endpoints. All require engineer review.
 
 ## Verification
+- The UI keeps the full-analysis action disabled until the Worker reports a configured analysis engine.
 - CI frontend build runs `npm install` because this repository currently has no committed npm lockfile.
 - The repository CI also runs the frontend TypeScript/Vite build to catch API integration type errors.
 - Run `python -m compileall -q app tests` and `python -m unittest discover -s tests -v` from this directory. GitHub Actions runs these checks on engine changes.
