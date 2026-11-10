@@ -91,7 +91,7 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
      if(ctRatio)parameters.push({page_number:page.pageNumber,kind:"ct_ratio",text:ctRatio[0],confidence:line.confidence});
      const unitPattern=ctRatio?/\b\d+(?:\.\d+)?\s*(?:kV|V|Hz|kW|MW|MVA)\b/gi:/\b\d+(?:\.\d+)?\s*(?:kV|V|A|kA|Hz|kW|MW|MVA)\b/gi;
      for(const value of lineText.match(unitPattern)??[])parameters.push({page_number:page.pageNumber,kind:"electrical_parameter",text:value,confidence:line.confidence});
-     const tags=[...new Set(lineText.match(/\b(?:QF|QS|QK|CT|PT|VT|FU|UPS|KM|KA|TV|TA|SB|HL|MCCB|ACB|VCB|DS)\s*[-#]?\s*\d+[A-Z]?\b/gi)??[])].filter(tag=>!(ctRatio&&/^CT\b/i.test(tag)));
+     const tags:string[]=[...new Set<string>(lineText.match(/\b(?:QF|QS|QK|CT|PT|VT|FU|UPS|KM|KA|TV|TA|SB|HL|MCCB|ACB|VCB|DS)\s*[-#]?\s*\d+[A-Z]?\b/gi)??[])].filter((tag:string)=>!(ctRatio&&/^CT\b/i.test(tag)));
      for(const tag of tags)componentRows.push({job_id:job.id,component_type:"equipment_tag_candidate",tag:tag.toUpperCase(),label:tag.toUpperCase(),confidence:line.confidence,page_number:page.pageNumber,bbox,attributes:{source:isCad?"cad_dxf_parser":"browser_tesseract",ocr_text:lineText,review_required:true}});
     }
    }
