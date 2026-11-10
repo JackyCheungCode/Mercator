@@ -9,7 +9,7 @@ from pytesseract import Output
 app = FastAPI(title="Mercator Drawing Analysis Engine", version="0.4.0")
 MAX_BYTES = 50 * 1024 * 1024
 ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".dxf"}
-PATTERNS = [re.compile(r"\b(?:QF|QS|DS|CT|PT|VT|TR|CB)\s*[-_]?\s*\d+\b", re.I), re.compile(r"\b(?:UPS|ATS|ACB|MCCB|VCB|ISOLATOR|DISCONNECTOR|TRANSFORMER)\s*[-_]?\s*\d*\b", re.I), re.compile(r"\b\d{2,5}\s*/\s*\d{1,4}\s*,\s*0\.[125]\b")]
+PATTERNS = [re.compile(r"\b(?:QF|QS|DS|CT|PT|VT|TR|CB)\s*[-_]?\s*\d+\b", re.I), re.compile(r"(?:\b(?:UPS|ATS|ACB|MCCB|VCB|ISOLATOR|DISCONNECTOR|TRANSFORMER|BUSBAR|BUS)\s*[-_]?\s*\d*\b|母線|匯流排)", re.I), re.compile(r"\b\d{2,5}\s*/\s*\d{1,4}\s*,\s*0\.[125]\b")]
 
 def check_auth(value: str | None):
     token = os.getenv("MERCATOR_ENGINE_TOKEN")
