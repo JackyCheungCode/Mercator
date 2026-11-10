@@ -15,6 +15,25 @@
 
 注意：目前尚未取得工程師逐項標註的設備、參數與 netlist 真值。模型對這些樣本的輸出只能列為候選，不能計算成已驗證準確率。
 
+### MERC-EL-001 已有 OCR 候選（不是 ground truth）
+
+現有瀏覽器 Tesseract 結果僅 1 個文字區塊，confidence 約 0.34。OCR 字串中出現以下候選，需工程師放大原圖逐項確認後才能轉為標註：
+- 160 kVA / SE-160kVA
+- CT 變比候選：1500/5（OCR 片段重複出現）
+- 開關/設備代號候選：NXA32N25-MD3、NXA16N16-MD3
+- 電源/控制電壓候選：AC220V
+- 其餘文字受低信心 OCR 影響，暫不列入標註。
+
+### Workers AI Qwen smoke test（非 Mercator 真實圖紙）
+
+使用 schematic-extractor 公開的 Bryston 放大器電路圖作為模型連通性與輸出格式測試：
+- 模型：Qwen 3.8 27B，thinking 關閉、JSON response format。
+- API：成功；finish_reason=stop。
+- 回傳：20 個設備標籤候選、20 個參數候選、5 個連線候選。
+- 用量：約 1,282 Neurons。
+- 限制：尚未由人工逐項比對真值；bbox 輸出使用 0–1000 座標，前端已加正規化；此 smoke test 不計入 Mercator 測試集準確率。
+
+
 ## 每個樣本需要的人工標註
 
 1. 頁面尺寸、圖紙類型、圖框/區域。
