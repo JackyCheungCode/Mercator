@@ -30,20 +30,20 @@ export type CadNativeAnalysis = {
   limitations: string[];
 };
 
-const clean = (value: unknown) => String(value ?? "").replace(/\\P/g, " ").replace(/\\\\[A-Za-z][^;]*;/g, " ").replace(/[{}]/g, " ").replace(/\\s+/g, " ").trim();
+const clean = (value: unknown) => String(value ?? "").replace(/\\P/g, " ").replace(/\\\\[A-Za-z][^;]*;/g, " ").replace(/[{}]/g, " ").replace(/\s+/g, " ").trim();
 const point = (value: any): CadPoint | null => {
   if (!value) return null;
   const x = Number(Array.isArray(value) ? value[0] : value.x ?? value.x1);
   const y = Number(Array.isArray(value) ? value[1] : value.y ?? value.y1);
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 };
-const tagPattern = /\\b(?:QF|QS|QK|CT|PT|VT|FU|UPS|KM|KA|TV|TA|SB|HL|MCCB|ACB|VCB|DS|TR)\\s*[-_#]?\\s*\\d+[A-Z]?\\b/gi;
+const tagPattern = /\b(?:QF|QS|QK|CT|PT|VT|FU|UPS|KM|KA|TV|TA|SB|HL|MCCB|ACB|VCB|DS|TR)\s*[-_#]?\s*\d+[A-Z]?\b/gi;
 const parameterPatterns: Array<[string, RegExp]> = [
-  ["voltage", /(?<![\\w.])\\d+(?:\\.\\d+)?\\s*(?:kV|V)\\b/gi],
-  ["current", /(?<![\\w/])\\d+(?:\\.\\d+)?\\s*(?:kA|A)\\b/gi],
-  ["frequency", /(?<![\\w.])(?:50|60)\\s*Hz\\b/gi],
-  ["ct_ratio", /(?<![\\w])\\d{1,5}\\s*\\/\\s*\\d{1,4}(?:\\s*,\\s*0\\.[125])?\\s*A?\\b/gi],
-  ["power", /(?<![\\w.])\\d+(?:\\.\\d+)?\\s*(?:kVA|MVA|kW|MW)\\b/gi]
+  ["voltage", /(?<![\w.])\d+(?:\.\d+)?\s*(?:kV|V)\b/gi],
+  ["current", /(?<![\w/])\d+(?:\.\d+)?\s*(?:kA|A)\b/gi],
+  ["frequency", /(?<![\w.])(?:50|60)\s*Hz\b/gi],
+  ["ct_ratio", /(?<![\w])\d{1,5}\s*\/\s*\d{1,4}(?:\s*,\s*0\.[125])?\s*A?\b/gi],
+  ["power", /(?<![\w.])\d+(?:\.\d+)?\s*(?:kVA|MVA|kW|MW)\b/gi]
 ];
 function classifyTag(tag: string): string {
   const prefix = tag.toUpperCase().match(/^[A-Z]+/)?.[0] ?? "";
@@ -98,13 +98,13 @@ export function analyzeCadEntities(drawing: any): CadNativeAnalysis {
       const heightValue = Number(entity.textHeight ?? entity.height ?? entity.charHeight);
       textBlocks.push({ text: value, layer, sourceType: type, confidence: 1, bbox: { x: anchor.x, y: anchor.y, width: null, height: Number.isFinite(heightValue) ? heightValue : null }, coordinateSystem: "cad_world" });
       for (const match of value.matchAll(tagPattern)) {
-        const tag = match[0].replace(/\\s+/g, "").toUpperCase();
+        const tag = match[0].replace(/\s+/g, "").toUpperCase();
         equipment.set(tag, { tag, category: classifyTag(tag), layer, sourceText: value, confidence: 1 });
       }
       for (const [kind, pattern] of parameterPatterns) {
         pattern.lastIndex = 0;
         for (const match of value.matchAll(pattern)) {
-          const candidate = match[0].replace(/\\s+/g, "").toUpperCase();
+          const candidate = match[0].replace(/\s+/g, "").toUpperCase();
           parameters.set(kind + "|" + candidate + "|" + anchor.x + "|" + anchor.y, { kind, value: candidate, sourceText: value, layer });
         }
       }
