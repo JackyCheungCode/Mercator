@@ -115,10 +115,11 @@ export function analyzeCadEntities(drawing: any): CadNativeAnalysis {
       const b = point(entity.endPoint ?? entity.end);
       if (a && b) points = [a, b];
     } else if (["LWPOLYLINE", "POLYLINE"].includes(type) && Array.isArray(entity.vertices)) {
-      points = entity.vertices.map(point).filter((p: CadPoint | null): p is CadPoint => Boolean(p));
-      if (entity.shape && points.length > 2) points.push(points[0]);
-    } else if (type === "SPLINE" && Array.isArray(entity.controlPoints)) {
-      points = entity.controlPoints.map(point).filter((p: CadPoint | null): p is CadPoint => Boolean(p));
+      const hasBulgeArc = entity.vertices.some((vertex: any) => Math.abs(Number(vertex?.bulge ?? (Array.isArray(vertex) ? vertex[2] : 0)) || 0) > 1e-9);
+      if (!hasBulgeArc) {
+        points = entity.vertices.map(point).filter((p: CadPoint | null): p is CadPoint => Boolean(p));
+        if ((entity.shape || entity.closed) && points.length > 2) points.push(points[0]);
+      }
     }
     const segmentsForEntity: Array<{ a: CadPoint; b: CadPoint }> = [];
     for (let i = 0; i < points.length - 1; i++) {
@@ -129,6 +130,8 @@ export function analyzeCadEntities(drawing: any): CadNativeAnalysis {
     const record: Record<string, unknown> = { entityIndex, type, layer, handle: entity?.handle ?? null };
     if (type === "INSERT") Object.assign(record, { blockName: entity.name ?? entity.block ?? null, insert: entity.position ?? entity.insertionPoint ?? null, rotation: entity.rotation ?? 0, attributes: Array.isArray(entity.attribs) ? entity.attribs : [] });
     if (points.length) record.vertices = points;
+    if (type === "SPLINE") Object.assign(record, { controlPoints: entity.controlPoints ?? [], fitPoints: entity.fitPoints ?? [] });
+    if (type === "ELLIPSE") Object.assign(record, { center: point(entity.center), majorAxisEndPoint: point(entity.majorAxisEndPoint), axisRatio: entity.axisRatio ?? null });
     if (["CIRCLE", "ARC", "ELLIPSE"].includes(type)) Object.assign(record, { center: point(entity.center), radius: entity.radius ?? null, startAngle: entity.startAngle ?? null, endAngle: entity.endAngle ?? null });
     if (["TEXT", "MTEXT", "ATTRIB", "ATTDEF"].includes(type)) Object.assign(record, { text: clean(entity.text ?? entity.string ?? ""), position: point(entity.startPoint ?? entity.position ?? entity.insertionPoint), height: entity.textHeight ?? entity.height ?? entity.charHeight ?? null });
     if (supported.has(type)) geometry.push(record);
