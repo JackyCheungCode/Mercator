@@ -36,22 +36,53 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
  async function openTaskResults(job:Job){if(!supabase)return;setSelectedTask(job);setTaskDetailsLoading(true);const [components,findings]=await Promise.all([supabase.from("detected_components").select("id,component_type,tag,label,confidence,page_number,bbox,attributes").eq("job_id",job.id).order("page_number",{ascending:true}),supabase.from("review_findings").select("id,category,severity,title,description,recommendation,page_number,bbox,evidence,review_status").eq("job_id",job.id).order("page_number",{ascending:true})]);setTaskDetailsLoading(false);if(components.error||findings.error){setNotice({kind:"error",title:"無法載入任務結果",subtitle:components.error?.message??findings.error?.message??"資料讀取失敗"});return;}setTaskDetails({components:(components.data??[]) as Array<Record<string,unknown>>,findings:(findings.data??[]) as Array<Record<string,unknown>>});}
  async function updateFindingStatus(findingId:string,status:"confirmed"|"false_positive"|"resolved"){if(!supabase||!selectedTask)return;const result=await supabase.from("review_findings").update({review_status:status,reviewed_by:user.id,reviewed_at:new Date().toISOString()}).eq("id",findingId);if(result.error){setNotice({kind:"error",title:"更新覆核狀態失敗",subtitle:result.error.message});return;}setTaskDetails(current=>({...current,findings:current.findings.map(item=>item.id===findingId?{...item,review_status:status}:item)}));}
  async function openPreview(d:Drawing){if(!supabase)return;setSelected(d);setPreviewUrl("");const prior=jobs.find(j=>j.drawing_id===d.id)?.summary?.visual_review;setVisualResult(prior?(JSON.stringify(prior,null,2)??""):"");setPreviewLoading(true);const r=await supabase.storage.from(d.storage_bucket||"mercator-drawings").createSignedUrl(d.storage_path,600);setPreviewLoading(false);if(r.error){setNotice({kind:"error",title:"無法開啟圖紙",subtitle:r.error.message});return;}setPreviewUrl(r.data.signedUrl);}
+ const cadDxfCache=new Map<string,string>();
+ async function getCadDxfText(d:Drawing,url:string):Promise<string>{
+  const cached=cadDxfCache.get(d.id);if(cached)return cached;
+  const response=await fetch(url);if(!response.ok)throw new Error("無法讀取私有 CAD 圖紙。");
+  const source=await response.arrayBuffer();let dxfText="";
+  if(d.file_type==="dwg"){
+   setVisualProgress("正在載入 DWG 轉換模組…");setVisualPercent(12);
+   const converter:any=await import("dwgdxf");await converter.init({wasmBase:converter.CDN_WASM_BASE});
+   setVisualProgress("正在將 DWG 轉換為 DXF…");setVisualPercent(25);
+   try{const converted=await converter.convertDwgToDxf(new Uint8Array(source));dxfText=new TextDecoder().decode(converted);}
+   catch(error){throw new Error("DWG 轉換失敗："+(error instanceof Error?error.message:String(error))+"。目前支援 R13 至 R2018；較新版本請先另存為 DXF。");}
+  }else dxfText=new TextDecoder().decode(source);
+  if(!dxfText.trim())throw new Error("CAD 檔案沒有可讀取的 DXF 內容。");
+  cadDxfCache.set(d.id,dxfText);return dxfText;
+ }
+ async function renderCadPreview(d:Drawing,url:string):Promise<Blob>{
+  setVisualProgress("正在準備 CAD 向量預覽…");setVisualPercent(28);
+  const dxfText=await getCadDxfText(d,url);const dxfUrl=URL.createObjectURL(new Blob([dxfText],{type:"application/dxf"}));
+  const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;width:2400px;height:1800px;overflow:hidden;background:#fff;";document.body.appendChild(host);
+  let viewer:any;
+  try{
+   const module:any=await import("dxf-viewer");const DxfViewer=module.DxfViewer??module.default?.DxfViewer;
+   if(!DxfViewer)throw new Error("CAD 圖面渲染模組載入失敗。");
+   viewer=new DxfViewer(host,{canvasWidth:2400,canvasHeight:1800,autoResize:false,clearColor:0xffffff,clearAlpha:1,antialias:true,preserveDrawingBuffer:true,blackWhiteInversion:false});
+   setVisualProgress("正在繪製 CAD 圖層、符號與連線…");setVisualPercent(38);
+   await viewer.Load({url:dxfUrl,fonts:[],progressCbk:(phase:string,done:number,total:number)=>{if(total>0)setVisualPercent(Math.min(52,38+Math.round(done/total*14)));}});
+   const bounds=viewer.GetBounds();if(bounds)viewer.FitView(bounds.minX,bounds.maxX,bounds.minY,bounds.maxY,0.06);
+   viewer.Render();const canvas=viewer.GetCanvas() as HTMLCanvasElement;
+   const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/png"));
+   if(!blob||blob.size<1000)throw new Error("CAD 圖面渲染未產生有效圖像；請檢查 DWG/DXF 是否包含可見模型空間內容。");
+   if(blob.size>5*1024*1024)throw new Error("CAD 預覽圖超過 AI 單頁 5 MB 限制，請先簡化圖層或另存較小範圍。");
+   return blob;
+  }finally{try{viewer?.Destroy();}catch{}host.remove();URL.revokeObjectURL(dxfUrl);}
+ }
  async function toVisionPages(d:Drawing,url:string,maxDimension=2400,maxPages=20):Promise<{pages:{pageNumber:number;blob:Blob}[];totalPages:number}>{
   const response=await fetch(url);if(!response.ok)throw new Error("無法讀取私有圖紙文件。");const source=await response.blob();
-  if(d.file_type==="dwg"||d.file_type==="dxf")throw new Error("DWG/DXF 目前以 CAD 向量文字與設備代號直接提取；AI 視覺初篩請先另存為 PDF 或圖片。");
+  if(d.file_type==="dwg"||d.file_type==="dxf"){
+   const image=await renderCadPreview(d,url);setVisualProgress("CAD 預覽已完成，準備 AI 視覺分析…");setVisualPercent(56);
+   return {pages:[{pageNumber:1,blob:image}],totalPages:1};
+  }
   if(d.file_type!=="pdf")return {pages:[{pageNumber:1,blob:source}],totalPages:1};
   setVisualProgress("正在讀取 PDF 頁面…");setVisualPercent(12);const pdfjs=await import("pdfjs-dist");const workerUrl=(await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;pdfjs.GlobalWorkerOptions.workerSrc=workerUrl;const pdf=await pdfjs.getDocument({data:await source.arrayBuffer()}).promise;const pageLimit=Math.min(pdf.numPages,maxPages);const pages:{pageNumber:number;blob:Blob}[]=[];
   for(let pageNumber=1;pageNumber<=pageLimit;pageNumber++){setVisualProgress("正在轉換 PDF 第 "+pageNumber+" / "+pageLimit+" 頁…");setVisualPercent(12+Math.round(pageNumber/pageLimit*16));const page=await pdf.getPage(pageNumber);const base=page.getViewport({scale:1});let scale=Math.min(2,maxDimension/Math.max(base.width,base.height));let blob:Blob|null=null;while(scale>=0.7){const viewport=page.getViewport({scale});const canvas=document.createElement("canvas");canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);const context=canvas.getContext("2d");if(!context)throw new Error("無法建立 PDF 預覽畫布。");await page.render({canvasContext:context,viewport}).promise;blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",0.92));canvas.width=0;canvas.height=0;if(blob&&blob.size<=4.8*1024*1024)break;scale*=0.8;}if(!blob||blob.size>5*1024*1024)throw new Error("PDF 第 "+pageNumber+" 頁轉圖後仍超過 5 MB，請降低該頁解析度或拆分 PDF。");pages.push({pageNumber,blob});}return {pages,totalPages:pdf.numPages};
  }
  async function extractCadText(d:Drawing,url:string):Promise<{text:string;lines:Array<{text:string;confidence:number;bbox:null}>;entities:number;format:string}>{
   setVisualProgress("正在讀取 CAD 圖紙…");setVisualPercent(8);
-  const response=await fetch(url);if(!response.ok)throw new Error("無法讀取私有 CAD 圖紙。");const source=await response.arrayBuffer();let dxfText="";
-  if(d.file_type==="dwg"){
-   setVisualProgress("正在載入 DWG 轉 DXF 模組…");setVisualPercent(16);
-   const dwgConverter:any=await import("dwgdxf");await dwgConverter.init({wasmBase:dwgConverter.CDN_WASM_BASE});setVisualProgress("正在將 DWG 轉換為 DXF…");setVisualPercent(30);
-   try{const converted=await dwgConverter.convertDwgToDxf(new Uint8Array(source));dxfText=new TextDecoder().decode(converted);}catch(error){throw new Error("DWG 轉換失敗："+(error instanceof Error?error.message:String(error))+"。目前支援 R13 至 R2018 格式；較新版本請先另存為 DXF。");}
-  }else{dxfText=new TextDecoder().decode(source);}
-  if(!dxfText.trim())throw new Error("CAD 檔案沒有可讀取的 DXF 內容。");
+  const dxfText=await getCadDxfText(d,url);
   setVisualProgress("正在解析 CAD 文字、圖層與設備標籤…");setVisualPercent(48);
   const parserModule:any=await import("dxf-parser");const DxfParser=parserModule.default??parserModule.DxfParser;const parser=new DxfParser();let drawing:any;
   try{drawing=parser.parseSync(dxfText);}catch(error){throw new Error("DXF 結構解析失敗："+(error instanceof Error?error.message:String(error)));}
@@ -134,8 +165,8 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
   {workflowStep===0&&<div className="workflow-upload"><div className="workflow-upload-icon"><Upload size={28}/></div><h4>{selected?selected.file_name:"選擇一份電氣圖紙"}</h4><p className="muted">支援 PDF、PNG、JPG、WEBP、TIFF、DWG、DXF，單檔最大 50 MB。</p><Button renderIcon={Upload} onClick={()=>fileInput.current?.click()} disabled={uploading}>{uploading?"正在上傳…":"選擇圖紙並建立任務"}</Button>{selected&&<Tag type="green">已選擇圖紙</Tag>}</div>}
   {workflowStep===1&&<div className="workflow-action"><div className="workflow-file"><Document size={24}/><div><strong>{selected?.file_name??"尚未選擇圖紙"}</strong><span className="muted">{selected?selected.file_type.toUpperCase()+" · "+sizeLabel(selected.file_size):"請先完成第一步上傳"}</span></div></div><div className="heading-actions">{selected&&<Button kind="tertiary" onClick={()=>void openPreview(selected)}>預覽圖紙</Button>}<Button renderIcon={Renew} onClick={()=>selected&&void runBrowserOcr()} disabled={!selected||visualBusy||previewLoading}>{visualBusy?visualProgress||"識別中…":"開始文字與設備識別"}</Button></div><p className="muted workflow-hint">OCR 在目前裝置執行；DWG/DXF 會直接提取 CAD 向量文字與圖塊標籤。首次載入轉換模組可能需要較長時間；掃描式 DWG 請先另存為 PDF 再做 OCR。</p></div>}
   {visualBusy&&<div className="workflow-progress"><InlineLoading description={visualProgress||"正在處理圖紙…"} /><ProgressBar label="識別進度" helperText={visualPercent+"%"} value={visualPercent} max={100}/></div>}
-  {workflowStep===2&&selected&&["dwg","dxf"].includes(selected.file_type)&&<InlineNotification kind="info" title="CAD 文字提取已完成" subtitle="DWG/DXF 可提取圖紙內嵌文字與圖塊名稱；如需 AI 視覺初篩，請先另存為 PDF 或圖片。" lowContrast/>}
-  {workflowStep===2&&<div className="workflow-action"><div className="workflow-file"><WarningAlt size={24}/><div><strong>AI 多頁視覺初篩</strong><span className="muted">辨識圖面設備標籤與可能的視覺疑點，結果仍需工程師確認。</span></div></div><div className="heading-actions"><Button kind="tertiary" onClick={()=>setWorkflowStep(1)}>返回設備識別</Button><Button onClick={()=>selected&&void runVisualReview()} disabled={!selected||visualBusy||previewLoading||["dwg","dxf"].includes(selected.file_type)}>{["dwg","dxf"].includes(selected?.file_type??"")?"CAD 格式請先轉存 PDF":visualBusy?visualProgress||"AI 分析中…":"開始 AI 分析"}</Button><Button kind="ghost" onClick={()=>setWorkflowStep(3)}>略過 AI，查看現有結果</Button></div></div>}
+  {workflowStep===2&&selected&&["dwg","dxf"].includes(selected.file_type)&&<InlineNotification kind="info" title="CAD 文字提取已完成" subtitle="DWG/DXF 將自動轉換為向量預覽圖，再交由 AI 檢查符號、連線與圖面疑點；結果仍需工程師覆核。" lowContrast/>}
+  {workflowStep===2&&<div className="workflow-action"><div className="workflow-file"><WarningAlt size={24}/><div><strong>AI 多頁視覺初篩</strong><span className="muted">辨識圖面設備標籤與可能的視覺疑點，結果仍需工程師確認。</span></div></div><div className="heading-actions"><Button kind="tertiary" onClick={()=>setWorkflowStep(1)}>返回設備識別</Button><Button onClick={()=>selected&&void runVisualReview()} disabled={!selected||visualBusy||previewLoading}>{visualBusy?visualProgress||"AI 分析中…":"開始 AI 分析"}</Button><Button kind="ghost" onClick={()=>setWorkflowStep(3)}>略過 AI，查看現有結果</Button></div></div>}
   {workflowStep===3&&<div className="workflow-action"><div className="result-summary"><div><strong>{jobs.find(j=>j.drawing_id===selected?.id)?.summary?.browser_ocr?Number((jobs.find(j=>j.drawing_id===selected?.id)?.summary?.browser_ocr as {text_blocks?:number}).text_blocks??0):0}</strong><span>OCR 文字區塊</span></div><div><strong>{jobs.find(j=>j.drawing_id===selected?.id)?.summary?.browser_ocr?Number((jobs.find(j=>j.drawing_id===selected?.id)?.summary?.browser_ocr as {equipment_tags?:number}).equipment_tags??0):0}</strong><span>設備代號候選</span></div><div><strong>{visualCounts(jobs.find(j=>j.drawing_id===selected?.id)?.summary??{}).findings}</strong><span>AI 疑點</span></div></div><p className="muted">請逐項核對原圖、座標與判斷依據。候選識別不等同正式電氣合規結論。</p><div className="heading-actions">{selected&&<Button kind="tertiary" onClick={()=>void openPreview(selected)}>返回圖紙證據</Button>}<Button onClick={()=>{const job=jobs.find(j=>j.drawing_id===selected?.id);if(job)void openTaskResults(job);else setPage("tasks");}}>打開完整結果中心</Button><Button kind="ghost" onClick={()=>setPage("tasks")}>查看全部任務</Button></div></div>}
  </div>
  <div className="workflow-footer"><Button kind="ghost" onClick={()=>{setPage("tasks");setSelected(null);}}>退出流程</Button><span className="muted">任務進度會保存；可稍後從「審查任務」繼續。</span></div>
