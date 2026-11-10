@@ -136,3 +136,61 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:clip}
     overflow-wrap: anywhere;
   }
 }
+
+
+/* AI report readability: the app shell uses Carbon g100, while report surfaces are light.
+   Keep report contrast independent from whether it is rendered in the workflow or task panel. */
+.visual-review-detail {
+  color: #161616 !important;
+  background: #f4f4f4;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+.visual-review-detail h2,
+.visual-review-detail h3,
+.visual-review-detail h4,
+.visual-review-detail p,
+.visual-review-detail li,
+.visual-review-detail strong,
+.visual-review-detail span,
+.visual-review-detail summary,
+.visual-review-detail td,
+.visual-review-detail th,
+.visual-review-detail label,
+.visual-review-detail code {
+  color: #161616 !important;
+}
+.visual-review-detail .muted,
+.visual-review-detail .finding-description {
+  color: #525252 !important;
+}
+.visual-review-detail .review-report-block {
+  color: #161616 !important;
+  background: #e8e8e8 !important;
+}
+.visual-review-detail .visual-review-page {
+  color: #161616 !important;
+  background: #ffffff;
+  padding: 1rem;
+  margin-top: .75rem;
+  border-left: 3px solid #0f62fe;
+}
+.visual-review-detail .review-report-block h4,
+.visual-review-detail .review-report-block p,
+.visual-review-detail .review-report-block strong,
+.visual-review-detail .visual-review-page h4,
+.visual-review-detail .visual-review-page p,
+.visual-review-detail .visual-review-page li,
+.visual-review-detail .visual-review-page strong {
+  color: #161616 !important;
+}
+.visual-review-detail .table-wrap { background: #ffffff !important; }
+.visual-review-detail .cds--data-table,
+.visual-review-detail .cds--data-table td,
+.visual-review-detail .cds--data-table th {
+  color: #161616 !important;
+  background: #ffffff;
+}
+.visual-review-detail .visual-result {
+  color: #161616 !important;
+  background: #e8e8e8 !important;
+}
