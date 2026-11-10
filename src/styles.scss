@@ -4,3 +4,81 @@
 .task-result-panel{margin-top:2rem;padding:1.5rem;background:var(--cds-layer);border-left:3px solid var(--cds-border-interactive)}.result-summary{display:flex;gap:2rem;margin:1.25rem 0 2rem}.result-summary div{display:flex;flex-direction:column;gap:.25rem}.result-summary strong{font-size:2rem;font-weight:400}.result-summary span,.finding-description{font-size:.8rem;color:var(--cds-text-secondary)}.task-result-panel h3{margin:1rem 0}.result-subheading{margin-top:2rem!important}.task-result-panel .heading-actions{gap:.25rem;flex-wrap:wrap}
 
 .compare-controls{margin:1.5rem 0}.compare-action{margin:1.5rem 0}.compare-output{margin-top:2rem;padding:1.5rem;background:#262626}.compare-diff-image{display:block;max-width:100%;max-height:75vh;object-fit:contain;margin:1rem auto;background:#fff}.result-summary{display:flex;gap:2rem;margin:1.25rem 0}.result-summary div{display:flex;flex-direction:column;gap:.25rem}.result-summary strong{font-size:1.7rem;font-weight:400}.result-summary span{font-size:.8rem;color:#a8a8a8}
+
+
+/* Guided workflow */
+.workflow-shell{max-width:1120px;margin:0 auto;padding:0 0 2rem;min-width:0}
+.workflow-intro{margin-bottom:1.75rem}
+.workflow-intro h2{font-size:1.5rem;font-weight:400;margin:0 0 .5rem}
+.workflow-intro p{max-width:720px}
+.mercator-stepper{margin:1.5rem 0 2rem;max-width:100%;overflow-x:auto;padding-bottom:.75rem}
+.mercator-stepper .cds--progress-step{min-width:0}
+.workflow-step-panel{background:var(--cds-layer);padding:clamp(1rem,3vw,2rem);min-width:0}
+.workflow-step-heading{display:flex;align-items:flex-start;gap:1rem;margin-bottom:2rem}
+.workflow-step-number{display:grid;place-items:center;flex:0 0 2.5rem;width:2.5rem;height:2.5rem;background:var(--cds-layer-accent);color:var(--cds-text-primary);font-size:1rem}
+.workflow-step-heading h3{font-size:1.25rem;font-weight:500;margin:0 0 .4rem}
+.workflow-step-heading p{margin:0;max-width:720px}
+.workflow-upload{min-height:260px;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;gap:.8rem;padding:2rem;background:var(--cds-layer-02)}
+.workflow-upload h4{font-size:1.1rem;font-weight:500;margin:0;max-width:100%;overflow-wrap:anywhere}
+.workflow-upload p{margin:0 0 .5rem;max-width:560px}
+.workflow-upload-icon{color:var(--cds-icon-primary)}
+.workflow-action{display:flex;flex-direction:column;gap:1.25rem}
+.workflow-file{display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--cds-layer-02);min-width:0}
+.workflow-file>div{display:flex;flex-direction:column;gap:.35rem;min-width:0}
+.workflow-file strong{overflow-wrap:anywhere}
+.workflow-hint{font-size:.8rem;margin:0}
+.workflow-footer{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-top:1rem}
+.workflow-footer .muted{font-size:.8rem}
+.workflow-step-panel .heading-actions{flex-wrap:wrap}
+.workflow-step-panel .result-summary{flex-wrap:wrap;gap:clamp(1rem,5vw,3rem)}
+/* Overlay navigation: never reserves or reduces the content width */
+.cds--content.app-content{margin-left:0!important;width:100%;max-width:none;min-width:0}
+.app-content{box-sizing:border-box;min-width:0;max-width:none;width:100%;overflow-x:clip}
+.mercator-side-nav{position:fixed!important;top:3rem!important;left:0!important;bottom:0!important;height:calc(100dvh - 3rem)!important;max-width:min(17rem,86vw)!important;width:min(17rem,86vw)!important;z-index:8002!important;box-shadow:0 12px 36px rgba(0,0,0,.38);transform:translateX(-105%);transition:transform .2s ease!important;will-change:transform}
+.mercator-side-nav.cds--side-nav--expanded{transform:translateX(0)}
+.nav-scrim{position:fixed;inset:3rem 0 0 0;width:100%;height:calc(100dvh - 3rem);padding:0;border:0;background:rgba(0,0,0,.48);z-index:8001;cursor:pointer}
+.page-heading,.section-title,.preview-panel,.task-result-panel,.workflow-shell{min-width:0;max-width:100%}
+.table-wrap{max-width:100%;min-width:0;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.table-wrap table{min-width:720px}
+.preview-panel .section-title{align-items:flex-start}
+.preview-panel .section-title>div:first-child{min-width:0;overflow-wrap:anywhere}
+.preview-panel .heading-actions{flex-wrap:wrap;justify-content:flex-end}
+.heading-actions{min-width:0;flex-wrap:wrap}
+img,iframe{max-width:100%}
+html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:clip}
+*,*::before,*::after{box-sizing:border-box}
+@media(max-width:672px){
+ .app-content{padding:1rem .875rem 2rem!important}
+ .page-heading{gap:1rem;margin-bottom:1.25rem}
+ .page-heading h1{font-size:1.65rem;overflow-wrap:anywhere}
+ .page-heading>div:first-child{min-width:0;width:100%}
+ .page-heading .heading-actions{width:100%;justify-content:flex-start}
+ .section-title{align-items:flex-start;flex-direction:column}
+ .section-title .heading-actions{width:100%}
+ .workflow-shell{padding:0}
+ .workflow-intro h2{font-size:1.25rem}
+ .mercator-stepper{margin:1rem 0 1.25rem}
+ .mercator-stepper .cds--progress-step{min-width:8.25rem;max-width:8.25rem}
+ .mercator-stepper .cds--progress-label{font-size:.72rem;white-space:normal;line-height:1.25}
+ .workflow-step-panel{padding:1rem}
+ .workflow-step-heading{gap:.75rem;margin-bottom:1.25rem}
+ .workflow-step-heading h3{font-size:1.1rem}
+ .workflow-upload{padding:1.25rem .75rem;min-height:220px}
+ .workflow-file{align-items:flex-start}
+ .workflow-action .heading-actions{width:100%;display:flex;flex-direction:column;align-items:stretch}
+ .workflow-action .heading-actions .cds--btn{max-width:none;width:100%;justify-content:center}
+ .workflow-footer{align-items:flex-start;flex-direction:column}
+ .workflow-footer .muted{font-size:.75rem}
+ .preview-panel{padding:1rem .75rem}
+ .preview-panel .section-title{gap:.75rem}
+ .preview-panel .heading-actions{width:100%;display:flex;flex-direction:column;align-items:stretch}
+ .preview-panel .heading-actions .cds--btn{max-width:none;width:100%;justify-content:center}
+ .task-result-panel{padding:1rem .75rem}
+ .task-result-panel .section-title{flex-direction:column}
+ .task-result-panel .heading-actions{width:100%}
+ .result-summary{gap:1.25rem;flex-wrap:wrap}
+ .compare-output{padding:1rem .75rem}
+ .engine-status{padding:1rem}
+ .nav-scrim{inset:3rem 0 0 0}
+}
+@media(prefers-reduced-motion:reduce){.mercator-side-nav{transition:none!important}}
