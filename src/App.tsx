@@ -48,7 +48,7 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
   const response=await fetch(url);if(!response.ok)throw new Error("無法讀取私有 CAD 圖紙。");const source=await response.arrayBuffer();let dxfText="";
   if(d.file_type==="dwg"){
    setVisualProgress("正在載入 DWG 轉 DXF 模組…");setVisualPercent(16);
-   const dwgConverter:any=await import("dwgdxf");await dwgConverter.init();setVisualProgress("正在將 DWG 轉換為 DXF…");setVisualPercent(30);
+   const dwgConverter:any=await import("dwgdxf");await dwgConverter.init({wasmBase:dwgConverter.CDN_WASM_BASE});setVisualProgress("正在將 DWG 轉換為 DXF…");setVisualPercent(30);
    try{const converted=await dwgConverter.convertDwgToDxf(new Uint8Array(source));dxfText=new TextDecoder().decode(converted);}catch(error){throw new Error("DWG 轉換失敗："+(error instanceof Error?error.message:String(error))+"。目前支援 R13 至 R2018 格式；較新版本請先另存為 DXF。");}
   }else{dxfText=new TextDecoder().decode(source);}
   if(!dxfText.trim())throw new Error("CAD 檔案沒有可讀取的 DXF 內容。");
