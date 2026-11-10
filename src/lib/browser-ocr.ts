@@ -14,16 +14,17 @@ export async function recognizePages(
   pages: OcrPageInput[],
   onProgress?: (pageNumber: number, status: string, progress: number) => void,
 ): Promise<OcrPageResult[]> {
+  let currentPageNumber = pages[0]?.pageNumber ?? 1;
   const worker = await createWorker("eng+chi_tra", 1, {
     logger: (message) => {
-      const current = pages[0]?.pageNumber ?? 1;
-      onProgress?.(current, message.status, message.progress ?? 0);
+      onProgress?.(currentPageNumber, message.status, message.progress ?? 0);
     },
   });
 
   try {
     const results: OcrPageResult[] = [];
     for (const page of pages) {
+      currentPageNumber = page.pageNumber;
       const { data } = await worker.recognize(page.blob);
       const lines = (data.lines ?? [])
         .map((line) => ({
