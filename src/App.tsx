@@ -180,7 +180,7 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
   setVisualProgress("正在啟動 CAD 背景解析工作執行緒…");setVisualPercent(38);
   const analysis=await analyzeCadInWorker(dxfText);
   const lines=analysis.textBlocks.map((item:any)=>({text:item.text,confidence:1,bbox:item.bbox}));
-  const unique=[...new Map(lines.map((line:any)=>[line.text,line])).values()];
+  const unique:Array<{text:string;confidence:number;bbox:any}>=[...new Map<string,{text:string;confidence:number;bbox:any}>(lines.map((line:any)=>[line.text,line] as const)).values()];
   if(!analysis.entityCount)throw new Error("CAD 文件已轉換，但沒有可解析的 CAD 實體。請檢查檔案版本或另存為 DXF。");
   setVisualPercent(70);
   return {text:unique.map((line:any)=>line.text).join("\n"),lines:unique,entities:analysis.entityCount,format:d.file_type.toUpperCase(),analysis};
