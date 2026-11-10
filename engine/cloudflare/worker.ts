@@ -47,7 +47,7 @@ export class EngineContainer extends DurableObject<Env> {
     if (!container.running) {
       container.start({
         image: container.images.base,
-        instance: "basic",
+        instance: "standard-1",
         enableInternet: false,
         env: {
           MERCATOR_ENGINE_TOKEN: this.env.ENGINE_TOKEN,
