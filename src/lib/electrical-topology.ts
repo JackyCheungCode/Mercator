@@ -40,7 +40,7 @@ export function buildCandidateTopology(analysis:Record<string,unknown>):Candidat
     if(byLabel.has(key))continue;
     const id="component:"+key.replace(/[^a-z0-9_-]+/gi,"_");
     byLabel.set(key,id);
-    nodes.push({id,label,category:clean(item.category)||"unknown",bbox:Array.isArray(item.bbox)?item.bbox.map(Number):undefined,confidence:confidence(item.confidence),source:"vision_candidate"});
+    nodes.push({id,label,category:clean(item.category)||"unknown",...(Array.isArray(item.bbox)?{bbox:item.bbox.map(Number)}:{}),confidence:confidence(item.confidence),source:"vision_candidate"});
   }
   const endpoint=(value:unknown)=>{
     const label=clean(value);
@@ -60,7 +60,7 @@ export function buildCandidateTopology(analysis:Record<string,unknown>):Candidat
     const evidence=clean(item.evidence);
     if(!from||!to||from===to||!evidence){unresolved++;continue;}
     const id="edge:"+index+":"+from+":"+to;
-    edges.push({id,from,to,evidence,bbox:Array.isArray(item.bbox)?item.bbox.map(Number):undefined,confidence:confidence(item.confidence),connection_status:"candidate_only",junction_confirmed:false});
+    edges.push({id,from,to,evidence,...(Array.isArray(item.bbox)?{bbox:item.bbox.map(Number)}:{}),confidence:confidence(item.confidence),connection_status:"candidate_only",junction_confirmed:false});
   }
   return {
     schema:"mercator-electrical-topology-candidate-v1",
