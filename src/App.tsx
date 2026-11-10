@@ -56,7 +56,7 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
   const dxfText=await getCadDxfText(d,url);
   // Guard the main thread: dxf-viewer parses and renders synchronously on the UI thread.
   const dxfBytes=new Blob([dxfText]).size;
-  const entityCount=(dxfText.match(/(?:^|\\r?\\n)0\\r?\\n/g)||[]).length;
+  const entityCount=(dxfText.match(/(?:^|\r?\n)0\r?\n/g)||[]).length;
   if(dxfBytes>12*1024*1024)throw new Error("CAD 文件轉換後超過 12 MB。為避免瀏覽器卡死，請在 CAD 軟體中關閉非必要圖層、清理重複/隱藏物件後另存 DXF。");
   if(entityCount>8000)throw new Error("CAD 圖元約 "+entityCount.toLocaleString()+" 個，超出目前瀏覽器安全渲染上限（8,000）。為避免頁面卡死，請先精簡圖層或分區另存 DXF；目前不會強行繪製。");
   const dxfUrl=URL.createObjectURL(new Blob([dxfText],{type:"application/dxf"}));
