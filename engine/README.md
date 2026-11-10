@@ -1,4 +1,4 @@
-# Mercator Analysis Engine V0.2
+# Mercator Analysis Engine V0.3
 
 ## Implemented
 - OpenCV raster preprocessing.
@@ -7,6 +7,8 @@
 - PNG/JPG/WEBP/TIFF OCR (up to 30 frames/pages).
 - DXF text and vector entity extraction: LINE, POLYLINE, CIRCLE, ARC and INSERT.
 - Conservative candidates for labels such as QF, CT, UPS, ATS, ACB, MCCB and VCB.
+- Literal extraction of voltage, current, frequency, CT-ratio and power text with page/bounding-box evidence.
+- Conservative review leads for low-confidence OCR, possible repeated equipment tags and uncertain CT-ratio text; these are not compliance findings.
 
 ## Not yet implemented
 - DWG decoding (convert to DXF first).
