@@ -6,6 +6,10 @@ on:
       - feature/v1-electrical-review
     paths:
       - "engine/**"
+      - "src/**"
+      - "package.json"
+      - "vite.config.ts"
+      - "tsconfig.json"
       - ".github/workflows/engine-check.yml"
   pull_request:
     paths:
