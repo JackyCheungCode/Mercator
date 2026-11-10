@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from PIL import Image
 from pytesseract import Output
 
-app = FastAPI(title="Mercator Drawing Analysis Engine", version="0.3.0")
+app = FastAPI(title="Mercator Drawing Analysis Engine", version="0.4.0")
 MAX_BYTES = 50 * 1024 * 1024
 ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".dxf"}
 PATTERNS = [re.compile(r"\bQF\s*[-_]?\s*\d+\b", re.I), re.compile(r"\bCT\s*[-_]?\s*\d*\b", re.I), re.compile(r"\b(?:UPS|ATS|ACB|MCCB|VCB)\s*[-_]?\s*\d*\b", re.I), re.compile(r"\b\d{2,5}\s*/\s*\d{1,4}\s*,\s*0\.[125]\b")]
@@ -113,6 +113,150 @@ def candidate_findings(blocks, labels, parameters):
             })
     return findings
 
+
+SYMBOL_TERMS = {
+    "circuit_breaker": ("QF", "CB", "ACB", "MCCB", "VCB"),
+    "isolator": ("QS", "DS", "ISOLATOR", "DISCONNECTOR"),
+    "current_transformer": ("CT",),
+    "voltage_transformer": ("PT", "VT"),
+    "transformer": ("T", "TR", "TRANSFORMER"),
+    "busbar": ("BUS", "BUSBAR", "母線", "匯流排"),
+}
+
+def classify_symbol_name(value: str):
+    token = re.sub(r"[^A-Z0-9\u4e00-\u9fff]", "", value.upper())
+    for kind, terms in SYMBOL_TERMS.items():
+        if any(token == term or token.startswith(term + " ") for term in terms):
+            return kind
+    return None
+
+def _dist(a, b):
+    return float(np.hypot(a[0]-b[0], a[1]-b[1]))
+
+def build_dxf_topology(geometry, tolerance=1e-3):
+    """Build a geometric connectivity graph from DXF line/polyline endpoints."""
+    nodes, edges, point_index = [], [], {}
+    def node_id(point):
+        key = (round(float(point[0])/tolerance), round(float(point[1])/tolerance))
+        if key not in point_index:
+            point_index[key] = len(nodes)
+            nodes.append({"id": point_index[key], "x": float(point[0]), "y": float(point[1]), "degree": 0})
+        return point_index[key]
+    for index, item in enumerate(geometry):
+        points = []
+        if item["type"] == "LINE":
+            points = [item["start"], item["end"]]
+        elif item["type"] in {"LWPOLYLINE", "POLYLINE"}:
+            points = item.get("vertices", [])
+        if len(points) < 2:
+            continue
+        ids = [node_id(p) for p in points]
+        for a, b in zip(ids, ids[1:]):
+            if a == b: continue
+            edges.append({"id": len(edges), "source": a, "target": b, "source_entity": index, "layer": item.get("layer")})
+            nodes[a]["degree"] += 1
+            nodes[b]["degree"] += 1
+    return {"nodes": nodes, "edges": edges, "node_count": len(nodes), "edge_count": len(edges),
+            "dangling_endpoints": [n for n in nodes if n["degree"] == 1],
+            "junction_candidates": [n for n in nodes if n["degree"] >= 3],
+            "method": "exact_dxf_endpoint_coincidence", "tolerance": tolerance}
+
+def detect_dxf_symbols(geometry, text_blocks):
+    symbols = []
+    for item in geometry:
+        if item["type"] != "INSERT": continue
+        name = item.get("block_name", "")
+        kind = classify_symbol_name(name)
+        if not kind: continue
+        x, y = item.get("insert", [0, 0])
+        symbols.append({"symbol_type": kind, "block_name": name, "page_number": 1,
+                        "bbox": {"x": x, "y": y, "width": None, "height": None},
+                        "confidence": 0.82, "source": "dxf_block_name", "review_required": True})
+    for block in text_blocks:
+        value = block["text_content"].strip().upper()
+        kind = classify_symbol_name(value)
+        if kind:
+            symbols.append({"symbol_type": kind, "label": value, "page_number": block["page_number"],
+                            "bbox": block["bbox"], "confidence": block["confidence"],
+                            "source": "nearby_text_label_candidate", "review_required": True})
+    return symbols
+
+def detect_raster_symbol_candidates(image, page, text_blocks):
+    """Find geometric symbol proposals; class labels are assigned only from nearby explicit tags."""
+    arr = np.asarray(image.convert("RGB"))
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    scale = max(1.0, max(gray.shape) / 2400.0)
+    if scale > 1:
+        gray = cv2.resize(gray, (int(gray.shape[1]/scale), int(gray.shape[0]/scale)))
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY_INV, 31, 10)
+    contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    proposals = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        area = cv2.contourArea(contour)
+        if area < 30 or area > gray.shape[0]*gray.shape[1]*0.015: continue
+        ratio = w / max(h, 1)
+        perimeter = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.035*perimeter, True)
+        circularity = (4*np.pi*area/(perimeter*perimeter)) if perimeter else 0
+        shape = "circle_candidate" if 0.68 <= circularity <= 1.25 else ("rectangle_candidate" if len(approx) == 4 and 0.65 <= ratio <= 1.55 else None)
+        if not shape: continue
+        bx, by, bw, bh = [int(v*scale) for v in (x,y,w,h)]
+        center = (bx+bw/2, by+bh/2)
+        nearby = []
+        for block in text_blocks:
+            if block["page_number"] != page: continue
+            b = block["bbox"]
+            tx, ty = b["x"]+b["width"]/2, b["y"]+b["height"]/2
+            if _dist(center, (tx,ty)) <= max(100, 2.5*max(bw,bh)):
+                nearby.append(( _dist(center,(tx,ty)), block))
+        label = None
+        if nearby:
+            for _, block in sorted(nearby, key=lambda v:v[0]):
+                label = classify_symbol_name(block["text_content"])
+                if label: break
+        proposals.append({"symbol_type": label or "unclassified_" + shape, "shape": shape,
+                          "page_number": page, "bbox": {"x": bx, "y": by, "width": bw, "height": bh},
+                          "confidence": 0.35 if label is None else 0.58,
+                          "source": "opencv_geometric_proposal", "review_required": True,
+                          "associated_label": next((b["text_content"] for _,b in sorted(nearby,key=lambda v:v[0]) if classify_symbol_name(b["text_content"])), None)})
+    return proposals[:500]
+
+def raster_line_candidates(image, page):
+    arr = np.asarray(image.convert("RGB"))
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=80,
+                            minLineLength=max(30, min(gray.shape)//80), maxLineGap=8)
+    segments = []
+    if lines is not None:
+        for line in lines[:3000]:
+            x1,y1,x2,y2 = [int(v) for v in line[0]]
+            segments.append({"page_number": page, "start": [x1,y1], "end": [x2,y2],
+                             "length": round(_dist((x1,y1),(x2,y2)),2), "source":"opencv_hough_candidate"})
+    return segments
+
+def review_topology_candidates(topology, symbols):
+    findings = []
+    if topology:
+        for node in topology.get("dangling_endpoints", [])[:100]:
+            findings.append({"category":"possible_open_connection","severity":"info",
+                "title":"可能存在未連接的導線端點",
+                "description":"DXF 幾何中此端點只有一條線段相接；可能是有意的引出端、跨頁連接或圖形未完整，需結合圖例與整張電路圖確認。",
+                "page_number":1,"bbox":{"x":node["x"],"y":node["y"],"width":0,"height":0},
+                "evidence":{"node":node,"topology_method":topology["method"]},"requires_engineer_review":True})
+    for symbol in symbols:
+        if symbol["symbol_type"].startswith("unclassified_"):
+            continue
+        if symbol["confidence"] < 0.65:
+            findings.append({"category":"symbol_identification_uncertain","severity":"info",
+                "title":"電氣符號分類需要覆核",
+                "description":f"候選符號辨識為 {symbol['symbol_type']}，信心值 {symbol['confidence']:.0%}，請核對原圖符號與圖例。",
+                "page_number":symbol["page_number"],"bbox":symbol["bbox"],
+                "evidence":symbol,"requires_engineer_review":True})
+    return findings
+
 def analyze_dxf(path: Path):
     try: doc = ezdxf.readfile(path)
     except Exception as exc: raise HTTPException(422, f"Unable to parse DXF: {exc}") from exc
@@ -137,11 +281,11 @@ def analyze_dxf(path: Path):
     return {"pages": 1, "text_blocks": blocks, "geometry": geometry, "entity_counts": counts, "format": "dxf"}
 
 @app.get("/health")
-def health(): return {"ok": True, "service": "mercator-analysis-engine", "version": "0.2.0"}
+def health(): return {"ok": True, "service": "mercator-analysis-engine", "version": "0.4.0"}
 
 @app.get("/v1/capabilities")
 def capabilities():
-    return {"version": "0.3.0", "ocr": True, "image_preprocessing": True, "pdf_rasterization": True, "dxf_vector_extraction": True, "symbol_detection": False, "electrical_topology": False, "rule_validation": False, "revision_comparison": False, "ocr_languages": os.getenv("TESSERACT_LANG", "chi_tra+eng").split("+")}
+    return {"version": "0.4.0", "ocr": True, "image_preprocessing": True, "pdf_rasterization": True, "dxf_vector_extraction": True, "symbol_detection": True, "electrical_topology": "dxf_endpoint_graph_and_raster_line_candidates", "rule_validation": "conservative_review_leads", "revision_comparison": False, "ocr_languages": os.getenv("TESSERACT_LANG", "chi_tra+eng").split("+")}
 
 @app.post("/v1/analyze")
 async def analyze(file: UploadFile = File(...), authorization: str | None = Header(default=None)):
@@ -157,8 +301,8 @@ async def analyze(file: UploadFile = File(...), authorization: str | None = Head
         labels = candidate_labels(result["text_blocks"])
         parameters = extract_electrical_parameters(result["text_blocks"])
         findings = candidate_findings(result["text_blocks"], labels, parameters)
-        return {"ok": True, "filename": name, **result, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings, "engine_version": "0.3.0", "notice": "CAD text/vector extraction and conservative review leads only; no electrical compliance decision."}
-    blocks, pages = [], 0
+        return {"ok": True, "filename": name, **result, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings + review_topology_candidates(build_dxf_topology(result["geometry"]), detect_dxf_symbols(result["geometry"], result["text_blocks"])), "engine_version": "0.4.0", "symbol_candidates": detect_dxf_symbols(result["geometry"], result["text_blocks"]), "topology": build_dxf_topology(result["geometry"]), "notice": "DXF symbol block-name candidates and geometric endpoint topology; connectivity and engineering meaning require review."}
+    blocks, pages, symbol_candidates, line_candidates = [], 0, [], []
     try:
         if suffix == ".pdf":
             pdf = fitz.open(stream=raw, filetype="pdf")
@@ -166,17 +310,17 @@ async def analyze(file: UploadFile = File(...), authorization: str | None = Head
             pages = pdf.page_count
             for i, page in enumerate(pdf):
                 pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-                blocks.extend(ocr_image(Image.open(io.BytesIO(pix.tobytes("png"))), i+1, os.getenv("TESSERACT_LANG", "chi_tra+eng")))
+                page_image = Image.open(io.BytesIO(pix.tobytes("png"))); blocks.extend(ocr_image(page_image, i+1, os.getenv("TESSERACT_LANG", "chi_tra+eng"))); symbol_candidates.extend(detect_raster_symbol_candidates(page_image, i+1, blocks)); line_candidates.extend(raster_line_candidates(page_image, i+1))
             pdf.close()
         else:
             image = Image.open(io.BytesIO(raw)); image.verify(); image = Image.open(io.BytesIO(raw))
             pages = getattr(image, "n_frames", 1)
             if pages > 30: raise HTTPException(413, "Image has more than 30 frames/pages.")
             for i in range(pages):
-                image.seek(i); blocks.extend(ocr_image(image.copy(), i+1, os.getenv("TESSERACT_LANG", "chi_tra+eng")))
+                image.seek(i); page_image=image.copy(); blocks.extend(ocr_image(page_image, i+1, os.getenv("TESSERACT_LANG", "chi_tra+eng"))); symbol_candidates.extend(detect_raster_symbol_candidates(page_image, i+1, blocks)); line_candidates.extend(raster_line_candidates(page_image, i+1))
     except HTTPException: raise
     except Exception as exc: raise HTTPException(422, f"Unable to decode or OCR drawing: {exc}") from exc
     labels = candidate_labels(blocks)
     parameters = extract_electrical_parameters(blocks)
     findings = candidate_findings(blocks, labels, parameters)
-    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings, "geometry": [], "engine_version": "0.3.0", "notice": "OCR candidates and conservative review leads only. Symbol detection, topology and compliance validation are not implemented."}
+    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings + review_topology_candidates(None, symbol_candidates), "symbol_candidates": symbol_candidates, "line_candidates": line_candidates, "topology": {"nodes": [], "edges": [], "method": "raster_line_segments_only_no_junction_claim"}, "geometry": [], "engine_version": "0.4.0", "notice": "Raster symbol/line proposals are computer-vision candidates only; no electrical connectivity or compliance conclusion is inferred."}
