@@ -237,6 +237,32 @@ def raster_line_candidates(image, page):
                              "length": round(_dist((x1,y1),(x2,y2)),2), "source":"opencv_hough_candidate"})
     return segments
 
+
+def build_raster_endpoint_graph(segments, tolerance=8.0):
+    """Cluster line-segment endpoints only; crossings are deliberately not assumed connected."""
+    nodes, edges, buckets = [], [], {}
+    def get_node(point):
+        cell = (round(point[0]/tolerance), round(point[1]/tolerance))
+        for dx in (-1,0,1):
+            for dy in (-1,0,1):
+                for idx in buckets.get((cell[0]+dx,cell[1]+dy),[]):
+                    n=nodes[idx]
+                    if _dist((n["x"],n["y"]),point) <= tolerance:
+                        return idx
+        idx=len(nodes)
+        nodes.append({"id":idx,"x":float(point[0]),"y":float(point[1]),"degree":0})
+        buckets.setdefault(cell,[]).append(idx)
+        return idx
+    for seg in segments:
+        a=get_node(seg["start"]); b=get_node(seg["end"])
+        if a==b: continue
+        edges.append({"id":len(edges),"source":a,"target":b,"length":seg["length"]})
+        nodes[a]["degree"]+=1; nodes[b]["degree"]+=1
+    return {"nodes":nodes,"edges":edges,"node_count":len(nodes),"edge_count":len(edges),
+            "dangling_endpoints":[n for n in nodes if n["degree"]==1],
+            "junction_candidates":[n for n in nodes if n["degree"]>=3],
+            "method":"raster_hough_endpoint_clustering_not_electrical_connectivity","tolerance_px":tolerance}
+
 def review_topology_candidates(topology, symbols):
     findings = []
     if topology:
@@ -323,4 +349,4 @@ async def analyze(file: UploadFile = File(...), authorization: str | None = Head
     labels = candidate_labels(blocks)
     parameters = extract_electrical_parameters(blocks)
     findings = candidate_findings(blocks, labels, parameters)
-    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings + review_topology_candidates(None, symbol_candidates), "symbol_candidates": symbol_candidates, "line_candidates": line_candidates, "topology": {"nodes": [], "edges": [], "method": "raster_line_segments_only_no_junction_claim"}, "geometry": [], "engine_version": "0.4.0", "notice": "Raster symbol/line proposals are computer-vision candidates only; no electrical connectivity or compliance conclusion is inferred."}
+    return {"ok": True, "filename": name, "format": suffix.lstrip("."), "pages": pages, "text_blocks": blocks, "candidate_labels": labels, "extracted_parameters": parameters, "candidate_findings": findings + review_topology_candidates(build_raster_endpoint_graph(line_candidates), symbol_candidates), "symbol_candidates": symbol_candidates, "line_candidates": line_candidates, "topology": build_raster_endpoint_graph(line_candidates), "geometry": [], "engine_version": "0.4.0", "notice": "Raster symbol/line proposals are computer-vision candidates only; no electrical connectivity or compliance conclusion is inferred."}
