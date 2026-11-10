@@ -35,13 +35,18 @@ export async function extractElectricalGeometry(blob:Blob,maxDimension=1000):Pro
     context.drawImage(bitmap,0,0,width,height);
     const pixels=context.getImageData(0,0,width,height).data;
     const gray=new Uint8Array(width*height);
+    const saturation=new Uint8Array(width*height);
     let histogram=0;
     for(let i=0,p=0;i<pixels.length;i+=4,p++){
-      const value=Math.round(pixels[i]*0.299+pixels[i+1]*0.587+pixels[i+2]*0.114);
+      const red=pixels[i],green=pixels[i+1],blue=pixels[i+2];
+      const value=Math.round(red*0.299+green*0.587+blue*0.114);
       gray[p]=value;
+      saturation[p]=Math.max(red,green,blue)-Math.min(red,green,blue);
       if(value<190)histogram++;
     }
     const threshold=histogram/(width*height)>0.38?145:178;
+    const ink=new Uint8Array(width*height);
+    for(let p=0;p<ink.length;p++)ink[p]=gray[p]<threshold||(saturation[p]>38&&gray[p]<245)?1:0;
     const rowRuns:Array<{a:number;b:number;fixed:number}>=[];
     const colRuns:Array<{a:number;b:number;fixed:number}>=[];
     const minHorizontal=Math.max(18,Math.round(width*0.014));
@@ -49,7 +54,7 @@ export async function extractElectricalGeometry(blob:Blob,maxDimension=1000):Pro
     for(let y=0;y<height;y++){
       let start=-1;
       for(let x=0;x<=width;x++){
-        const dark=x<width&&gray[y*width+x]<threshold;
+        const dark=x<width&&ink[y*width+x]===1;
         if(dark&&start<0)start=x;
         if(!dark&&start>=0){
           if(x-start>=minHorizontal)rowRuns.push({a:start,b:x-1,fixed:y});
@@ -60,7 +65,7 @@ export async function extractElectricalGeometry(blob:Blob,maxDimension=1000):Pro
     for(let x=0;x<width;x++){
       let start=-1;
       for(let y=0;y<=height;y++){
-        const dark=y<height&&gray[y*width+x]<threshold;
+        const dark=y<height&&ink[y*width+x]===1;
         if(dark&&start<0)start=y;
         if(!dark&&start>=0){
           if(y-start>=minVertical)colRuns.push({a:start,b:y-1,fixed:x});
