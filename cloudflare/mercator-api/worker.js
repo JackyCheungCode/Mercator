@@ -24,8 +24,9 @@ const prompt=`你是電氣工程圖視覺初篩助手。只根據圖片中清楚
 {"category":"規範適用性與設計依據","status":"...","notes":"未提供規範時必須資訊不足"}
 ],
 "categorized_findings":[{"category":"以上分類之一","title":"疑點標題","severity":"critical|high|medium|low|info","description":"可見異常及原因","evidence":"圖上可定位的文字/符號/連線，不可捏造座標","impact":"可能影響或待評估","recommendation":"工程師核對/修改建議","confidence":0.0,"page_region":"可辨識區域","needs_engineer_review":true}],
-"device_labels":[{"text":"可讀代號/名稱","category":"設備類型","confidence":0.0}],
-"visible_parameters":[{"text":"圖上可讀的電壓/電流/功率/頻率/CT/PT 變比等原文","context":"所屬回路"}],
+"device_labels":[{"text":"逐字可讀設備代號","category":"設備類型","visible_evidence":"圖上可核對的原始標籤","bbox":[0.0,0.0,1.0,1.0],"confidence":0.0}],
+"visible_parameters":[{"text":"逐字可讀的電壓/電流/功率/頻率/CT/PT 變比原文","context":"所屬回路","bbox":[0.0,0.0,1.0,1.0]}],
+"wire_observations":[{"from":"起點設備/端子標籤","to":"終點設備/端子標籤","evidence":"可見導線及端點標籤","bbox":[0.0,0.0,1.0,1.0],"confidence":0.0,"connection_status":"candidate_only"}],
 "uncertain_regions":["模糊文字、符號或無法追蹤的連線"],
 "limitations":["單張圖片無法驗證的項目及所需資料"]
 }
