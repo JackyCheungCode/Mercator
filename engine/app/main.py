@@ -49,18 +49,18 @@ def candidate_labels(blocks):
 def extract_electrical_parameters(blocks):
     """Extract literal parameter strings; never infer missing engineering values."""
     patterns = [
-        ("voltage", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kV|V)(?!\\w)", re.I)),
-        ("current", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kA|A)(?!\\w)", re.I)),
-        ("frequency", re.compile(r"(?<!\\w)(?:50|60)\\s*Hz(?!\\w)", re.I)),
-        ("ct_ratio", re.compile(r"(?<!\\w)\\d{1,5}\\s*/\\s*\\d{1,4}(?:\\s*,\\s*0\\.[125])?(?!\\w)", re.I)),
-        ("power", re.compile(r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:kVA|MVA|kW|MW)(?!\\w)", re.I)),
+        ("voltage", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kV|V)(?!\w)", re.I)),
+        ("current", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kA|A)(?!\w)", re.I)),
+        ("frequency", re.compile(r"(?<!\w)(?:50|60)\s*Hz(?!\w)", re.I)),
+        ("ct_ratio", re.compile(r"(?<!\w)\d{1,5}\s*/\s*\d{1,4}(?:\s*,\s*0\.[125])?(?!\w)", re.I)),
+        ("power", re.compile(r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:kVA|MVA|kW|MW)(?!\w)", re.I)),
     ]
     found, seen = [], set()
     for block in blocks:
         text = block["text_content"]
         for kind, pattern in patterns:
             for match in pattern.finditer(text):
-                value = re.sub(r"\\s+", "", match.group()).upper()
+                value = re.sub(r"\s+", "", match.group()).upper()
                 key = (block["page_number"], kind, value, block["bbox"].get("x"), block["bbox"].get("y"))
                 if key in seen:
                     continue
@@ -81,7 +81,7 @@ def candidate_findings(blocks, labels, parameters):
     for block in blocks:
         for pattern in PATTERNS[:3]:
             for match in pattern.finditer(block["text_content"]):
-                tag = re.sub(r"\\s+", "", match.group()).upper()
+                tag = re.sub(r"\s+", "", match.group()).upper()
                 occurrences.setdefault((block["page_number"], tag), []).append(block)
         if block["confidence"] < 0.35:
             findings.append({
