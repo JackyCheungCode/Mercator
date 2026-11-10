@@ -56,3 +56,8 @@ Deployment prerequisites and sequence:
 The Containers API access check was performed for the connected Cloudflare account on 2026-11-10 and denied due to plan eligibility. No Container application or image has been created yet. Upgrading a plan is an account billing change and is not performed automatically.
 
 CI runs Python unit tests, the Container Worker TypeScript type-check, and a Docker image build. Passing CI does not mean the image has been deployed.
+
+
+## Deployment status: optional legacy engine
+
+The first production path is now free-tier-first: PDF.js + Tesseract.js run OCR in the user's browser, while Cloudflare Workers AI provides optional visual triage and Supabase stores evidence. The Python/FastAPI engine remains in this directory for algorithm development and future deployment, but the current UI does not require a hosted Python engine. Do not deploy Cloudflare Containers unless the account is intentionally upgraded to Workers Paid. The first release does not include drawing revision comparison or device-movement detection.
