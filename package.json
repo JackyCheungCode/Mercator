@@ -17,7 +17,8 @@
     "react-dom": "^18.3.1",
     "pdfjs-dist": "4.10.38",
     "tesseract.js": "^6.0.1",
-    "@mlightcad/libredwg-web": "^0.8.7"
+    "dwgdxf": "^2.0.1",
+    "dxf-parser": "^1.1.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
