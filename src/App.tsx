@@ -53,15 +53,21 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
  }
  async function renderCadPreview(d:Drawing,url:string):Promise<Blob>{
   setVisualProgress("正在準備 CAD 向量預覽…");setVisualPercent(28);
-  const dxfText=await getCadDxfText(d,url);const dxfUrl=URL.createObjectURL(new Blob([dxfText],{type:"application/dxf"}));
-  const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;width:2400px;height:1800px;overflow:hidden;background:#fff;";document.body.appendChild(host);
+  const dxfText=await getCadDxfText(d,url);
+  // Guard the main thread: dxf-viewer parses and renders synchronously on the UI thread.
+  const dxfBytes=new Blob([dxfText]).size;
+  const entityCount=(dxfText.match(/(?:^|\\r?\\n)0\\r?\\n/g)||[]).length;
+  if(dxfBytes>12*1024*1024)throw new Error("CAD 文件轉換後超過 12 MB。為避免瀏覽器卡死，請在 CAD 軟體中關閉非必要圖層、清理重複/隱藏物件後另存 DXF。");
+  if(entityCount>8000)throw new Error("CAD 圖元約 "+entityCount.toLocaleString()+" 個，超出目前瀏覽器安全渲染上限（8,000）。為避免頁面卡死，請先精簡圖層或分區另存 DXF；目前不會強行繪製。");
+  const dxfUrl=URL.createObjectURL(new Blob([dxfText],{type:"application/dxf"}));
+  const host=document.createElement("div");host.style.cssText="position:fixed;left:-12000px;top:0;width:1200px;height:900px;overflow:hidden;background:#fff;";document.body.appendChild(host);
   let viewer:any;
   try{
    const [module,THREE]:any=await Promise.all([import("dxf-viewer"),import("three")]);const DxfViewer=module.DxfViewer??module.default?.DxfViewer;
    if(!DxfViewer)throw new Error("CAD 圖面渲染模組載入失敗。");
-   viewer=new DxfViewer(host,{canvasWidth:2400,canvasHeight:1800,autoResize:false,clearColor:new THREE.Color(0xffffff),clearAlpha:1,antialias:true,preserveDrawingBuffer:true,blackWhiteInversion:false});
+   viewer=new DxfViewer(host,{canvasWidth:1200,canvasHeight:900,autoResize:false,clearColor:new THREE.Color(0xffffff),clearAlpha:1,antialias:false,preserveDrawingBuffer:true,blackWhiteInversion:false});
    setVisualProgress("正在繪製 CAD 圖層、符號與連線…");setVisualPercent(38);
-   await viewer.Load({url:dxfUrl,fonts:[],progressCbk:(phase:string,done:number,total:number)=>{if(total>0)setVisualPercent(Math.min(52,38+Math.round(done/total*14)));}});
+   let lastProgress=-1;await viewer.Load({url:dxfUrl,fonts:[],progressCbk:(phase:string,done:number,total:number)=>{if(total>0){const next=Math.min(52,38+Math.round(done/total*14));if(next!==lastProgress){lastProgress=next;setVisualPercent(next);}}}});
    const bounds=viewer.GetBounds();if(bounds)viewer.FitView(bounds.minX,bounds.maxX,bounds.minY,bounds.maxY,0.06);
    viewer.Render();const canvas=viewer.GetCanvas() as HTMLCanvasElement;
    const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/png"));
