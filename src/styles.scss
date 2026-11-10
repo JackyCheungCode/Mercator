@@ -82,3 +82,57 @@ html,body,#root{width:100%;max-width:100%;min-width:0;overflow-x:clip}
  .nav-scrim{inset:3rem 0 0 0}
 }
 @media(prefers-reduced-motion:reduce){.mercator-side-nav{transition:none!important}}
+
+
+/* Accessible light surface for the AI result report inside the dark Carbon shell.
+   The report contains inline light backgrounds; explicitly reset inherited g100 text colors. */
+.workflow-step-panel:has(.visual-review-detail),
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-page {
+  color: #161616;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail {
+  background: #f4f4f4;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail h2,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail h3,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail h4,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail p,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail li,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail strong,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail span,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail summary,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail td,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail th {
+  color: #161616;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .muted,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .finding-description {
+  color: #525252 !important;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .visual-result {
+  background: #e8e8e8;
+  color: #161616;
+  border-left-color: #0f62fe;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .table-wrap {
+  background: #ffffff;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .cds--data-table {
+  color: #161616;
+  background: #ffffff;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .cds--data-table td,
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail .cds--data-table th {
+  color: #161616;
+}
+.workflow-step-panel:has(.visual-review-detail) .visual-review-detail details {
+  color: #161616;
+}
+@media (max-width: 672px) {
+  .workflow-step-panel:has(.visual-review-detail) .visual-review-detail {
+    padding: 1rem .75rem;
+    overflow-wrap: anywhere;
+  }
+}
