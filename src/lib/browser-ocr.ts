@@ -26,10 +26,15 @@ export async function recognizePages(
     for (const page of pages) {
       currentPageNumber = page.pageNumber;
       const { data } = await worker.recognize(page.blob);
-      const lines = (data.lines ?? [])
+      const ocrData = data as unknown as {
+        text?: string;
+        confidence?: number;
+        lines?: Array<{ text: string; confidence?: number; bbox?: OcrBoundingBox }>;
+      };
+      const lines = (ocrData.lines ?? [])
         .map((line) => ({
           text: line.text.trim(),
-          confidence: Math.max(0, Math.min(1, (line.confidence ?? data.confidence ?? 0) / 100)),
+          confidence: Math.max(0, Math.min(1, (line.confidence ?? ocrData.confidence ?? 0) / 100)),
           bbox: line.bbox
             ? {
                 x0: line.bbox.x0,
@@ -42,8 +47,8 @@ export async function recognizePages(
         .filter((line) => line.text.length > 0);
       results.push({
         pageNumber: page.pageNumber,
-        text: data.text ?? "",
-        confidence: Math.max(0, Math.min(1, (data.confidence ?? 0) / 100)),
+        text: ocrData.text ?? "",
+        confidence: Math.max(0, Math.min(1, (ocrData.confidence ?? 0) / 100)),
         lines,
       });
       onProgress?.(page.pageNumber, "page-complete", 1);
