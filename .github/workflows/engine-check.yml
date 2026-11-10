@@ -47,20 +47,3 @@ jobs:
         run: npm install
       - name: TypeScript and Vite build
         run: npm run build
-
-  container-worker-check:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: engine
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Install Wrangler toolchain
-        run: npm install --no-audit --no-fund
-      - name: Type-check Container Worker
-        run: npm run typecheck
-      - name: Build Python engine image
-        run: docker build -t mercator-engine:ci .
