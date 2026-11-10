@@ -126,7 +126,7 @@ SYMBOL_TERMS = {
 def classify_symbol_name(value: str):
     token = re.sub(r"[^A-Z0-9\u4e00-\u9fff]", "", value.upper())
     for kind, terms in SYMBOL_TERMS.items():
-        if any(token == term or token.startswith(term + " ") for term in terms):
+        if any(re.fullmatch(re.escape(term) + r"\\d*", token) for term in terms):
             return kind
     return None
 
