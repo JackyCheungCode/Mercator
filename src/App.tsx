@@ -162,6 +162,9 @@ function AppShell({user,onSignOut}:{user:User;onSignOut:()=>void}){
  async function extractCadText(d:Drawing,url:string):Promise<{text:string;lines:Array<{text:string;confidence:number;bbox:any}>;entities:number;format:string;analysis:any}>{
   setVisualProgress("正在讀取 CAD 向量資料…");setVisualPercent(8);
   const dxfText=await getCadDxfText(d,url);
+  const dxfBytes=new Blob([dxfText]).size;const estimatedEntities=(dxfText.match(/(?:^|\\r?\\n)0\\r?\\n/g)||[]).length;
+  if(dxfBytes>12*1024*1024)throw new Error("CAD 轉換後超過 12 MB。為避免瀏覽器主執行緒卡死，請清理非必要圖層或分區另存 DXF。");
+  if(estimatedEntities>8000)throw new Error("CAD 圖元約 "+estimatedEntities.toLocaleString()+" 個，超出目前瀏覽器安全解析上限（8,000）。請先精簡圖層或分區另存 DXF。");
   setVisualProgress("正在解析 CAD 實體、圖層、圖塊屬性與座標…");setVisualPercent(42);
   const parserModule:any=await import("dxf-parser");const DxfParser=parserModule.default??parserModule.DxfParser;const parser=new DxfParser();let drawing:any;
   try{drawing=parser.parseSync(dxfText);}catch(error){throw new Error("DXF 結構解析失敗："+(error instanceof Error?error.message:String(error)));}
